@@ -37,7 +37,7 @@ Each layer can be mixed and matched. Most inference engines expose an OpenAI-com
 
 These do the actual computation: load a model file, accept a prompt, produce tokens.
 
-### llama.cpp
+### [llama.cpp](https://github.com/ggerganov/llama.cpp)
 
 **Layer:** Raw inference engine (C/C++)
 
@@ -54,7 +54,7 @@ The original high-performance LLM runtime for consumer hardware. Loads models in
 
 ---
 
-### Ollama
+### [Ollama](https://ollama.com)
 
 **Layer:** Model manager + API wrapper around llama.cpp
 
@@ -72,7 +72,7 @@ Ollama is a convenience layer on top of llama.cpp. It handles model downloading 
 
 ---
 
-### vLLM
+### [vLLM](https://github.com/vllm-project/vllm)
 
 **Layer:** High-throughput inference server (Python)
 
@@ -91,7 +91,7 @@ Combined with **continuous batching** (incoming requests are slotted into the ne
 
 ---
 
-### TabbyAPI
+### [TabbyAPI](https://github.com/theroyallab/tabbyAPI)
 
 **Layer:** FastAPI inference server, ExllamaV3-optimized
 
@@ -109,7 +109,7 @@ Supports PagedAttention on Ampere+ GPUs and continuous dynamic batching. More co
 
 ---
 
-### Aphrodite Engine
+### [Aphrodite Engine](https://github.com/PygmalionAI/aphrodite-engine)
 
 **Layer:** High-throughput inference server (vLLM-derived)
 
@@ -129,7 +129,7 @@ Maintained by PygmalionAI, Aphrodite is a fork/extension of vLLM focused on broa
 
 These sit in front of inference engines and add user management, authentication, and a browser interface.
 
-### Open WebUI
+### [Open WebUI](https://github.com/open-webui/open-webui)
 
 **Layer:** Web UI + API gateway
 
@@ -149,7 +149,7 @@ The de-facto standard web frontend for local LLMs. A self-hosted chat interface 
 
 ---
 
-### LocalAI
+### [LocalAI](https://github.com/mudler/LocalAI)
 
 **Layer:** Unified API gateway + multi-backend orchestrator
 
@@ -165,7 +165,7 @@ LocalAI is a self-hosted drop-in replacement for the OpenAI API. Unlike Open Web
 
 ---
 
-### text-generation-webui (oobabooga)
+### [text-generation-webui](https://github.com/oobabooga/text-generation-webui) (oobabooga)
 
 **Layer:** Web UI + multi-backend wrapper
 
@@ -181,7 +181,7 @@ The original "everything in one" local LLM tool. Runs inference internally via p
 
 ---
 
-### LM Studio
+### [LM Studio](https://lmstudio.ai)
 
 **Layer:** Desktop app + headless inference server
 
@@ -288,9 +288,9 @@ For HTTPS + external access, put Nginx or Caddy in front of Open WebUI on port 4
 
 All inference engines expose an OpenAI-compatible API. This means:
 
-- **Open WebUI** can connect to any of them — switch inference engines without changing your UI or client config
-- **opencode**, Continue, LangChain, LiteLLM, and any other tool expecting an OpenAI API just work
+- **[Open WebUI](https://github.com/open-webui/open-webui)** can connect to any of them — switch inference engines without changing your UI or client config
+- **[opencode](https://github.com/sst/opencode)**, [Continue](https://continue.dev), [LangChain](https://github.com/langchain-ai/langchain), [LiteLLM](https://github.com/BerriAI/litellm), and any other tool expecting an OpenAI API just work
 - You can run **multiple inference engines** simultaneously and have Open WebUI expose them as different "models" to users
-- **LocalAI** can sit in front of vLLM to add auth + multimodal, while still forwarding LLM requests to vLLM
+- **[LocalAI](https://github.com/mudler/LocalAI)** can sit in front of vLLM to add auth + multimodal, while still forwarding LLM requests to vLLM
 
 The OpenAI API compatibility layer is the glue that makes the whole ecosystem composable.

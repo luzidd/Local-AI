@@ -4,11 +4,11 @@ Documentation and concepts for running LLMs locally on CPU hardware, plus a read
 
 ## Concepts
 
-- System Prompt
-- Tools
-- Delimiter Tokens
-- Modelfile
-- [Prefill](prefill.md)
+- [System Prompt](#1-system-prompt) — role definition, constraints, output format; the highest-leverage input
+- [Tools](#2-tool-descriptions) — function schemas the model reads to decide when and how to call external actions
+- [Delimiter Tokens](#4-delimiter-tokens) — chat template tokens (`<|system|>`, `<|user|>`, etc.) that separate prompt roles
+- [Modelfile](deployments/local-cpu/config/Modelfile) — per-model sampling params and context window config (Ollama-specific)
+- [Prefill](prefill.md) — the input-processing phase before the first output token; why it's slow on CPU
 
 ## Quick Start
 
@@ -43,9 +43,10 @@ More info: [Software Stack](software-stack.md)
 Handles user input, interface to tools and runs the loop of agentic reasoning. Can be implemented in various languages (Python, Node.js, Go, Rust, etc.) and can run on the same machine or a different one.
 
 Examples:
-- VS Code
-- OpenCode
-- Claude Code
+- [VS Code + Continue](https://continue.dev) — IDE extension with chat, autocomplete, and tool use
+- [OpenCode](https://github.com/sst/opencode) — terminal-native agentic coding assistant
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — Anthropic's terminal agent
+- [oh-my-pi](https://www.npmjs.com/package/@oh-my-pi/pi-coding-agent) (`omp`) — the harness used in the [local-cpu deployment](deployments/local-cpu/)
 
 ---
 
