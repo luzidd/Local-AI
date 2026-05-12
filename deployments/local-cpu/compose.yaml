@@ -1,0 +1,68 @@
+name: local-ai
+
+services:
+  ollama:
+    image: docker.io/ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./config/Modelfile:/tmp/Modelfile:ro
+    environment:
+      # CPU thread count — set to your physical core count (not hyperthreads)
+      - OLLAMA_NUM_THREADS=${OLLAMA_NUM_THREADS:-8}
+      # Flash attention reduces KV cache memory usage
+      - OLLAMA_FLASH_ATTENTION=1
+      # Only keep one model loaded at a time (RAM constraint)
+      - OLLAMA_MAX_LOADED_MODELS=1
+      # Keep the model warm between requests
+      - OLLAMA_KEEP_ALIVE=30m
+      # Disable GPU entirely — CPU-only mode
+      - CUDA_VISIBLE_DEVICES=""
+      - OLLAMA_GPU_OVERHEAD=0
+    # No devices block = CPU-only; do not add gpu resources here
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  omp:
+    build:
+      context: .
+      dockerfile: Dockerfile.omp
+    container_name: omp
+    # Must be run interactively; start with: docker compose run --rm omp
+    stdin_open: true
+    tty: true
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      # Persist oh-my-pi sessions, credentials, and memory
+      - omp_data:/root/.omp
+      # Inject provider and model configuration
+      - ./config/models.yml:/root/.omp/agent/models.yml:ro
+      - ./config/config.yml:/root/.omp/agent/config.yml:ro
+      # Mount your project workspace into the container
+      - ${WORKSPACE_DIR:-./workspace}:/workspace
+    working_dir: /workspace
+    environment:
+      # Point omp at the Ollama service on the internal Docker network
+      - OLLAMA_HOST=http://ollama:11434
+    # Use the interactive profile so this service is never auto-started.
+    # Launch with: docker compose run --rm omp
+    profiles:
+      - interactive
+    # No explicit networks needed — Compose attaches all services to the
+    # project default network (local-ai_default) automatically. Docker's
+    # internal DNS resolves the service name "ollama" from within this container.
+
+volumes:
+  ollama_data:
+    driver: local
+  omp_data:
+    driver: local

@@ -1,0 +1,40 @@
+# oh-my-pi provider configuration
+# Path inside container: /root/.omp/agent/models.yml
+#
+# Tells omp to use the local Ollama instance as its LLM provider.
+# The baseUrl uses the Docker service name "ollama" (internal DNS).
+# When running omp outside Docker, change to: http://localhost:11434/v1
+
+providers:
+  ollama:
+    baseUrl: http://ollama:11434/v1
+    # auth: none tells omp this provider needs no credentials and suppresses
+    # the "only showing models with configured api keys" filter. An empty or
+    # unset OLLAMA_API_KEY env var is not equivalent — omp still treats the
+    # provider as unauthenticated-but-unconfigured without this field.
+    auth: none
+    api: openai-completions
+
+    models:
+      - id: gemma4-local
+        name: Gemma 4 26B MoE (Local CPU, Q4)
+        # reasoning: false — omp's reasoning flag enables provider-level API extensions
+        # (e.g. Anthropic's `thinking` parameter, OpenAI's `reasoning_effort` field).
+        # Ollama's OpenAI-compatible endpoint does not support these API extensions;
+        # enabling it would cause omp to send parameters Ollama would reject.
+        # Gemma 4's thinking mode is prompt-controlled instead: prepend <|think|> to
+        # the system prompt to activate chain-of-thought. See config.yml or pass
+        # --append-system-prompt "<|think|>" at runtime.
+        reasoning: false
+        input:
+          - text
+          - image
+        # All costs are zero for local inference
+        cost:
+          input: 0
+          output: 0
+          cacheRead: 0
+          cacheWrite: 0
+        # Must match num_ctx in the Modelfile (or lower)
+        contextWindow: 65536
+        maxTokens: 8192

@@ -1,0 +1,51 @@
+# oh-my-pi agent configuration
+# Path inside container: /root/.omp/agent/config.yml
+#
+# Assigns the local Gemma 4 model to all agent roles.
+# Format: <provider>/<model-id>  where model-id matches the id in models.yml
+
+modelRoles:
+  default: ollama/gemma4-local
+  smol: ollama/gemma4-local
+  slow: ollama/gemma4-local
+  plan: ollama/gemma4-local
+  commit: ollama/gemma4-local
+
+# Prefer the local Ollama provider over any cloud providers
+modelProviderOrder:
+  - ollama
+
+# Sampling parameters (passed per-request; must align with Modelfile)
+topP: 0.95
+topK: 64
+
+# Context compaction — important with a 32K context window.
+# Summarises old turns so the active window stays below the limit.
+compaction:
+  enabled: true
+  # Tokens reserved for the model's response
+  reserveTokens: 4096
+  # How many recent tokens to keep verbatim before summarising
+  keepRecentTokens: 12288
+  autoContinue: true
+
+# Disable thinking block display — Gemma 4 emits thought tags;
+# hide them in the TUI to keep output clean (thoughts still happen).
+hideThinkingBlock: false
+
+# Task isolation — disabled by default (no git worktrees in container)
+task:
+  eager: false
+  isolation:
+    mode: none
+    merge: patch
+
+# Terminal display
+terminal:
+  showImages: false
+
+# Retry config — helpful when CPU inference is slow and requests time out
+retry:
+  enabled: true
+  maxRetries: 3
+  baseDelayMs: 3000
