@@ -1,6 +1,6 @@
 # Local AI
 
-This repo explains how local ai hosting works. The concepts behind each layer and tool.
+Documentation and concepts for running LLMs locally on CPU hardware, plus a ready-to-use Docker/Podman deployment.
 
 ## Concepts
 
@@ -9,6 +9,24 @@ This repo explains how local ai hosting works. The concepts behind each layer an
 - Delimiter Tokens
 - Modelfile
 - [Prefill](prefill.md)
+
+## Quick Start
+
+Get **Gemma 4 26B** running locally in three commands (requires Docker or Podman, ~18 GB disk, recommended 32 GB RAM):
+
+```sh
+cd deployments/local-cpu
+bash scripts/setup.sh       # one-time: pulls model (~18 GB), builds images
+bash scripts/start-omp.sh   # launch the interactive agentic harness
+```
+
+See [`deployments/local-cpu/`](deployments/local-cpu/) for full details, config files, and Windows scripts.
+
+### Performance Expectations
+
+- long prefill on CPU
+- ~20GB RAM usage at runtime by ollama (model + KV cache)
+- ~1–2 tokens/sec on CPU (Gemma 4 26B MoE)
 
 ## Layers
 
