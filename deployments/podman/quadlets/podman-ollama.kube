@@ -1,0 +1,14 @@
+[Unit]
+Description=Ollama LLM Server (CPU-only, Gemma 4 26B Q4)
+After=network-online.target
+
+[Kube]
+# Path is relative to this unit file's installed location.
+# install-quadlets.sh copies ollama.yaml alongside this file.
+# Generated service name: podman-ollama.service
+Yaml=ollama.yaml
+
+[Service]
+Restart=always
+# Allow extra time on first start -- image pull or model load can be slow
+TimeoutStartSec=300

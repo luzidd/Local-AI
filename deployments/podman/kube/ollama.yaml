@@ -1,0 +1,84 @@
+# Ollama LLM server — Vulkan iGPU (AMD Ryzen), Gemma 4 26B Q4
+#
+# Deploy:   podman kube play kube/ollama.yaml
+# Teardown: podman kube play --down kube/ollama.yaml
+# Logs:     podman logs -f ollama-ollama
+#
+# After deploying, pull the model:
+#   podman cp modelfiles/gemma4.Modelfile ollama-ollama:/tmp/Modelfile  (pod-container naming)
+#   podman exec ollama-ollama ollama pull gemma4:26b
+#   podman exec ollama-ollama ollama create gemma4-local -f /tmp/Modelfile
+#
+# Run omp (Ollama is on localhost:11434 via hostPort — no shared network needed):
+#   bash podman/bind-mount/podman.sh start
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-data
+  labels:
+    app: local-ai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Enough for Gemma 4 26B Q4 (~18 GB) plus headroom for additional models
+      storage: 30Gi
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ollama
+  labels:
+    app: local-ai
+spec:
+  # restartPolicy: Always keeps Ollama running like a service
+  restartPolicy: Always
+  securityContext:
+    # Grant the render group so the container can open /dev/dri/renderD128.
+    # Check the GID on the host with: getent group render
+    supplementalGroups: [104]
+  containers:
+    - name: ollama
+      image: docker.io/ollama/ollama:latest
+      ports:
+        - containerPort: 11434
+          hostPort: 11434
+          protocol: TCP
+      env:
+        # CPU thread count — set to your physical core count (not hyperthreads)
+        - name: OLLAMA_NUM_THREADS
+          value: "8"
+        # Flash attention reduces KV cache memory usage
+        - name: OLLAMA_FLASH_ATTENTION
+          value: "1"
+        # Only keep one model loaded at a time (RAM constraint)
+        - name: OLLAMA_MAX_LOADED_MODELS
+          value: "1"
+        # Keep model warm between requests
+        - name: OLLAMA_KEEP_ALIVE
+          value: "30m"
+        # CPU-only mode - disable GPU entirely
+        #- name: CUDA_VISIBLE_DEVICES
+        #  value: ""
+        # Vulkan GPU acceleration (AMD Ryzen iGPU)
+        - name: OLLAMA_VULKAN
+          value: "1"
+        - name: OLLAMA_GPU_OVERHEAD
+          value: "0"
+      volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama
+        - name: dri
+          mountPath: /dev/dri
+      resources: {}
+  volumes:
+    - name: ollama-data
+      persistentVolumeClaim:
+        claimName: ollama-data
+    - name: dri
+      hostPath:
+        path: /dev/dri

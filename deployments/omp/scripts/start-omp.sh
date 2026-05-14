@@ -11,7 +11,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
+DEPLOY_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 cd "$DEPLOY_DIR"
 
 die() { printf '\033[1;31m[omp]\033[0m ERROR: %s\n' "$*" >&2; exit 1; }

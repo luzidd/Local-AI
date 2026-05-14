@@ -1,0 +1,4 @@
+[Volume]
+# Persistent storage for Ollama model weights (~18 GB for Gemma 4 26B Q4).
+# Managed by Podman; data lives in ~/.local/share/containers/storage/volumes/
+VolumeName=ollama-data

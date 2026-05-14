@@ -1,5 +1,5 @@
-# setup.ps1 — One-time setup for the local-cpu deployment on Windows.
-# Run from the deployments/local-cpu directory in PowerShell.
+# setup.ps1 — One-time setup for the CPU deployment on Windows.
+# Run from the deployments/ directory in PowerShell.
 #
 # Requires: Docker Desktop for Windows (WSL2 backend recommended)
 param()

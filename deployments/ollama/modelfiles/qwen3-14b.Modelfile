@@ -1,0 +1,35 @@
+# Qwen 3 14B — CPU-optimised Modelfile
+#
+# Base: qwen3:14b (dense, 14.8B params)
+# Quantization: Q4_K_M (~9 GB RAM) — comfortable on 32 GB RAM CPU-only hosts
+#
+# To switch to Q8 (requires ~16 GB free RAM):
+#   FROM qwen3:14b-q8_0
+# Note: pull the Q8 variant first with: ollama pull qwen3:14b-q8_0
+FROM qwen3:14b
+
+# --- Sampling parameters (Qwen 3 recommended baseline) ---
+PARAMETER temperature 0.7
+PARAMETER top_p 0.8
+PARAMETER top_k 20
+
+# --- Context window ---
+# Qwen 3 supports up to 128K tokens. KV cache at 32K ≈ 2–3 GB; at 128K ≈ 8–9 GB.
+# 32K is a safe default on a 32 GB host: 9 GB weights + 3 GB KV = ~12 GB total,
+# leaving plenty of headroom for omp's tool overhead (~16K tokens).
+PARAMETER num_ctx 32768
+
+# --- CPU thread count ---
+# Set to your physical core count (not logical/hyperthreaded).
+# Overridden at runtime by OLLAMA_NUM_THREADS env var; this is a fallback.
+PARAMETER num_thread 8
+
+# --- Thinking mode ---
+# Qwen 3 supports hybrid thinking mode. Thinking is disabled by default here;
+# enable per-request by appending /think to the prompt, or set:
+#   PARAMETER thinking true
+# to enable it globally (increases latency significantly on CPU).
+
+# --- Stop sequences ---
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"

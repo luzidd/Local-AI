@@ -1,0 +1,5 @@
+[Network]
+# Shared network for Ollama and omp containers.
+# Referenced by ollama.container as: Network=local-ai.network
+# When running omp manually, connect with: --network local-ai
+NetworkName=local-ai

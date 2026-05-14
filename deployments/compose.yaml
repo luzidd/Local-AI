@@ -9,7 +9,7 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-      - ./config/Modelfile:/tmp/Modelfile:ro
+      - ./ollama/modelfiles/gemma4.Modelfile:/tmp/Modelfile:ro
     environment:
       # CPU thread count — set to your physical core count (not hyperthreads)
       - OLLAMA_NUM_THREADS=${OLLAMA_NUM_THREADS:-8}
@@ -33,7 +33,7 @@ services:
   omp:
     build:
       context: .
-      dockerfile: Dockerfile.omp
+      dockerfile: omp/Dockerfile.omp
     container_name: omp
     # Must be run interactively; start with: docker compose run --rm omp
     stdin_open: true
@@ -45,8 +45,8 @@ services:
       # Persist oh-my-pi sessions, credentials, and memory
       - omp_data:/root/.omp
       # Inject provider and model configuration
-      - ./config/models.yml:/root/.omp/agent/models.yml:ro
-      - ./config/config.yml:/root/.omp/agent/config.yml:ro
+      - ./omp/config/models.yml:/root/.omp/agent/models.yml:ro
+      - ./omp/config/config.yml:/root/.omp/agent/config.yml:ro
       # Mount your project workspace into the container
       - ${WORKSPACE_DIR:-./workspace}:/workspace
     working_dir: /workspace

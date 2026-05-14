@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# setup.sh — One-time setup for the local-cpu deployment.
-# Run from the deployments/local-cpu directory.
+# setup.sh — One-time setup for the CPU deployment.
+# Run from the deployments/ directory.
 # Requires: Docker with Compose v2, internet access for the initial model pull.
 set -euo pipefail
 
@@ -39,9 +39,9 @@ echo ""
 log "Ollama is ready."
 
 # ── Pull and register the model ───────────────────────────────────────────────
-bash "$SCRIPT_DIR/pull-model.sh"
+bash "$DEPLOY_DIR/ollama/scripts/pull-model.sh"
 
 log ""
 log "Setup complete."
-log "Start oh-my-pi with:  bash scripts/start-omp.sh"
+log "Start oh-my-pi with:  bash omp/scripts/start-omp.sh"
 log "                  or: docker compose run --rm --profile interactive omp"

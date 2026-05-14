@@ -2,31 +2,46 @@
 
 Documentation and concepts for running LLMs locally on CPU hardware, plus a ready-to-use Docker/Podman deployment.
 
-## Concepts
+## Start Here
 
-- [System Prompt](#1-system-prompt) — role definition, constraints, output format; the highest-leverage input
-- [Tools](#2-tool-descriptions) — function schemas the model reads to decide when and how to call external actions
-- [Delimiter Tokens](#4-delimiter-tokens) — chat template tokens (`<|system|>`, `<|user|>`, etc.) that separate prompt roles
-- [Modelfile](deployments/local-cpu/config/Modelfile) — per-model sampling params and context window config (Ollama-specific)
-- [Prefill](prefill.md) — the input-processing phase before the first output token; why it's slow on CPU
+- I want to run the local CPU setup: see [deployments/README.md](deployments/README.md)
+- I want to understand the stack layers: see [software-stack.md](software-stack.md)
+- I want to understand why first-token latency is high on CPU: see [prefill.md](prefill.md)
+
+If you are unsure where to begin, start with the deployment guide and use the default Docker Compose path.
+
+## Choose This Repo If
+
+- you want to run a local coding-agent stack on a CPU-only machine
+- you have about 32 GB RAM and around 20 GB free disk
+- you accept slow first-token latency in exchange for a fully local setup
+- you want a working deployment first, with architecture docs available afterward
 
 ## Quick Start
 
 Get **Gemma 4 26B** running locally in three commands (requires Docker or Podman, ~18 GB disk, recommended 32 GB RAM):
 
 ```sh
-cd deployments/local-cpu
-bash scripts/setup.sh       # one-time: pulls model (~18 GB), builds images
-bash scripts/start-omp.sh   # launch the interactive agentic harness
+cd deployments
+bash scripts/setup.sh           # one-time: pulls model (~18 GB), builds images
+bash omp/scripts/start-omp.sh   # launch the interactive agentic harness
 ```
 
-See [`deployments/local-cpu/`](deployments/local-cpu/) for full details, config files, and Windows scripts.
+See [deployments/README.md](deployments/README.md) for the default setup path, alternative Podman methods, config files, and Windows scripts.
 
 ### Performance Expectations
 
 - long prefill on CPU
-- ~20GB RAM usage at runtime by ollama (model + KV cache)
-- ~1–2 tokens/sec on CPU (Gemma 4 26B MoE)
+- ~20 GB RAM usage at runtime by Ollama (model + KV cache)
+- ~1-2 tokens/sec on CPU (Gemma 4 26B MoE)
+
+## Deep Dives
+
+- [System Prompt](#1-system-prompt) — role definition, constraints, output format; the highest-leverage input
+- [Tools](#2-tool-descriptions) — function schemas the model reads to decide when and how to call external actions
+- [Delimiter Tokens](#4-delimiter-tokens) — chat template tokens (`<|system|>`, `<|user|>`, etc.) that separate prompt roles
+- [Modelfile](deployments/ollama/modelfiles/gemma4.Modelfile) — per-model sampling params and context window config (Ollama-specific)
+- [Prefill](prefill.md) — the input-processing phase before the first output token; why it's slow on CPU
 
 ## Layers
 
@@ -46,7 +61,7 @@ Examples:
 - [VS Code + Continue](https://continue.dev) — IDE extension with chat, autocomplete, and tool use
 - [OpenCode](https://github.com/sst/opencode) — terminal-native agentic coding assistant
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — Anthropic's terminal agent
-- [oh-my-pi](https://www.npmjs.com/package/@oh-my-pi/pi-coding-agent) (`omp`) — the harness used in the [local-cpu deployment](deployments/local-cpu/)
+- [oh-my-pi](https://www.npmjs.com/package/@oh-my-pi/pi-coding-agent) (`omp`) — the harness used in the [CPU deployment](deployments/)
 
 ---
 

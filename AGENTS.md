@@ -5,28 +5,28 @@ Documentation and deployment repository for running LLMs locally on CPU hardware
 ## Project Structure
 
 - **Concept docs**: [`README.md`](README.md), [`prefill.md`](prefill.md), [`software-stack.md`](software-stack.md)
-- **Deployment**: [`deployments/local-cpu/`](deployments/local-cpu/) — Ollama + oh-my-pi via Docker Compose (CPU-only, Gemma 4 26B Q4)
+- **Deployment**: [`deployments/`](deployments/) — Ollama + oh-my-pi via Docker Compose (CPU-only, Gemma 4 26B Q4)
 - **Import**: [`import/`](import/) — external documents for incoorporation into the project
 
-## Deployment: local-cpu
+## Deployment
 
 Runs **Gemma 4 26B MoE** (Q4_K_M, ~18 GB RAM) via Ollama on a CPU-only machine.
 The agentic harness is **oh-my-pi** (`omp`), running in a separate Bun-based container.
 
-### Commands (run from `deployments/local-cpu/`)
+### Commands (run from `deployments/`)
 
 | Task | Command |
 |------|---------|
 | One-time setup | `bash scripts/setup.sh` |
 | Start Ollama | `docker compose up -d ollama` |
-| Pull / re-register model | `bash scripts/pull-model.sh` |
-| Start omp (interactive) | `bash scripts/start-omp.sh` |
+| Pull / re-register model | `bash ollama/scripts/pull-model.sh` |
+| Start omp (interactive) | `bash omp/scripts/start-omp.sh` |
 
 ### Key Config Files
 
-- [`config/Modelfile`](deployments/local-cpu/config/Modelfile) — sampling params, `num_ctx`, stop sequences
-- [`config/models.yml`](deployments/local-cpu/config/models.yml) — Ollama provider + model definition for omp
-- [`config/config.yml`](deployments/local-cpu/config/config.yml) — omp agent roles, compaction, retry settings
+- [`ollama/modelfiles/gemma4.Modelfile`](deployments/ollama/modelfiles/gemma4.Modelfile) — sampling params, `num_ctx`, stop sequences
+- [`omp/config/models.yml`](deployments/omp/config/models.yml) — Ollama provider + model definition for omp
+- [`omp/config/config.yml`](deployments/omp/config/config.yml) — omp agent roles, compaction, retry settings
 
 ## Critical Constraints & Pitfalls
 

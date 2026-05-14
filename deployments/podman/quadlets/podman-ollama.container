@@ -1,0 +1,33 @@
+[Unit]
+Description=Ollama LLM Server (CPU-only, Gemma 4 26B Q4)
+After=network-online.target
+
+[Container]
+Image=docker.io/ollama/ollama:latest
+ContainerName=ollama
+
+# Model weights — uses the ollama-data.volume unit in this same directory
+Volume=podman-ollama-data.volume:/root/.ollama
+
+# Expose API on localhost only (remove 127.0.0.1: to expose on all interfaces)
+PublishPort=127.0.0.1:11434:11434
+
+# Shared network so omp can reach Ollama by container name
+Network=podman-local-ai.network
+
+# CPU thread count — set to your physical core count (not hyperthreads)
+Environment=OLLAMA_NUM_THREADS=8
+# Flash attention reduces KV cache memory usage
+Environment=OLLAMA_FLASH_ATTENTION=1
+# Only keep one model loaded at a time (RAM constraint)
+Environment=OLLAMA_MAX_LOADED_MODELS=1
+# Keep model warm between requests (avoids reload penalty)
+Environment=OLLAMA_KEEP_ALIVE=30m
+# CPU-only mode — disable GPU entirely
+Environment=CUDA_VISIBLE_DEVICES=
+Environment=OLLAMA_GPU_OVERHEAD=0
+
+[Service]
+Restart=always
+# Allow time for the daemon to start (weights are large)
+TimeoutStartSec=120

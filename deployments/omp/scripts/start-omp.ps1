@@ -15,7 +15,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$DeployDir = Split-Path -Parent $PSScriptRoot
+$DeployDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Push-Location $DeployDir
 
 try {
