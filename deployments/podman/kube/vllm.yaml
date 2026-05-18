@@ -1,0 +1,191 @@
+# vLLM inference server — ROCm (AMD GPU), Gemma 4 27B MoE (26B A4B)
+#
+# Deploy:   podman kube play kube/vllm.yaml
+# Teardown: podman kube play --down kube/vllm.yaml
+# Logs:     podman logs -f vllm-vllm
+#
+# vLLM serves an OpenAI-compatible API on port 8000:
+#   curl http://localhost:8000/v1/models
+#   curl http://localhost:8000/v1/chat/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model":"google/gemma-4-27b-it","messages":[{"role":"user","content":"Hello"}]}'
+#
+# ── MODEL ───────────────────────────────────────────────────────────────────
+# Gemma 4 27B is a sparse MoE: ~26B total parameters, ~4B active per token.
+# HuggingFace ID: google/gemma-4-27b-it  (gated — accept the license first)
+# Native context support: up to 256K tokens.
+#
+# For GGUF (reuse files from Ollama or download separately):
+#   Download Q6_K: huggingface-cli download bartowski/google_gemma-4-27b-it-GGUF \
+#                    --include "*Q6_K*" --local-dir /path/to/cache
+#   Then set:  --model=/root/.cache/huggingface/gguf/gemma-4-27b-it-Q6_K.gguf
+#              --tokenizer=google/gemma-4-27b-it
+#              --load-format=gguf
+#
+# ── EXPERT OFFLOADING STRATEGY ─────────────────────────────────────────────
+# The inactive expert weights (~17–22B) sit idle in VRAM. Offloading them to
+# CPU RAM frees the GPU for higher-precision weights and a larger KV cache.
+# Only the currently-routed experts need to be on GPU per token.
+#
+# Memory budget (32 GB system RAM, 16 GB VRAM):
+#
+#   Quant   Experts→CPU   Non-experts   GPU @128K    CPU used   RAM left
+#   ──────────────────────────────────────────────────────────────────────
+#   Q6_K    ~17 GB        ~3 GB GPU     ~6.9 GB      ~23 GB     ~9 GB  ✓
+#   Q8_0    ~22 GB        ~5 GB GPU     ~8.9 GB      ~28 GB     ~4 GB  ✓ (tight)
+#
+#   KV cache (FP8) at various context lengths:
+#     64K → 1.2 GB   128K → 2.4 GB   256K → 4.8 GB
+#   (Derived from empirical: Q4 fills 16 GB at 80K context)
+#
+# Q6_K is recommended for 32 GB RAM. Q8_0 works but leaves little headroom.
+#
+# Two offloading backends; only one should be active at a time:
+#
+#   UVA (zero-copy, active below):
+#     --cpu-offload-gb N            ← GB to spill to CPU
+#     --cpu-offload-params experts  ← target only MoE expert tensors
+#
+#   Prefetch (async pipeline, better decode latency):
+#     --offload-group-size 4        ← group every 4 transformer layers
+#     --offload-num-in-group 2      ← offload last 2 layers of each group
+#     --offload-prefetch-step 2     ← prefetch 2 groups ahead (hides PCIe stall)
+#     --offload-params experts      ← target only MoE expert tensors
+#
+# ── KV CACHE ────────────────────────────────────────────────────────────────
+# FP8 KV cache halves memory vs FP16. Supported natively on ROCm AMD GPUs.
+# ───────────────────────────────────────────────────────────────────────────
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-cache
+  labels:
+    app: local-ai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # HuggingFace model cache.
+      # Gemma 4 27B Q6_K GGUF ≈ 20 GB on disk; Q8_0 ≈ 27 GB.
+      # BF16 safetensors ≈ 54 GB if downloading the full HF model.
+      storage: 60Gi
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vllm
+  labels:
+    app: local-ai
+spec:
+  restartPolicy: Always
+  securityContext:
+    # video (44) + render (104) groups required for ROCm GPU access.
+    # Verify on host: getent group video; getent group render
+    supplementalGroups: [44, 104]
+  containers:
+    - name: vllm
+      # Official vLLM ROCm image — NOT the CUDA (vllm-openai:latest) image.
+      # Supported AMD GPUs: RX 7900 series (gfx1100/1101), MI200/MI300,
+      #                     RX 9000 series, Ryzen AI MAX/AI 300.
+      image: docker.io/vllm/vllm-openai-rocm:latest
+      ports:
+        - containerPort: 8000
+          hostPort: 8000
+          protocol: TCP
+      env:
+        # ROCm/HIP GPU selection. Find your arch: rocminfo | grep "Name:" | grep gfx
+        - name: ROCM_VISIBLE_DEVICES
+          value: "0"
+        - name: HIP_VISIBLE_DEVICES
+          value: "0"
+        # HuggingFace weights cache inside the PVC.
+        - name: HF_HOME
+          value: "/root/.cache/huggingface"
+        # Gemma 4 is a gated model — HF_TOKEN is required.
+        # Accept the license at https://huggingface.co/google/gemma-4-27b-it
+        # then generate a token at https://huggingface.co/settings/tokens
+        - name: HF_TOKEN
+          value: "hf_YOUR_TOKEN_HERE"
+
+      args:
+        # ── Model ─────────────────────────────────────────────────────────
+        # Gemma 4 27B MoE from HuggingFace (safetensors, BF16).
+        # vLLM will quantize or run as-is depending on --dtype and
+        # --quantization flags. For GGUF, see the header comments above.
+        - --model=google/gemma-4-27b-it
+        - --dtype=bfloat16
+        - --trust-remote-code
+
+        # ── Server ────────────────────────────────────────────────────────
+        - --host=0.0.0.0
+        - --port=8000
+
+        # ── Memory ────────────────────────────────────────────────────────
+        # Reserve 95 % of GPU VRAM for vLLM (weights on-GPU + KV cache).
+        - --gpu-memory-utilization=0.95
+
+        # Context window. With expert offloading the GPU holds only the
+        # non-expert layers (~3 GB at Q6), leaving ~10 GB for KV cache:
+        #   128K FP8 KV ≈ 2.4 GB  →  comfortable
+        #   256K FP8 KV ≈ 4.8 GB  →  also fits if you want full model max
+        # Change to 262144 for full 256K support.
+        - --max-model-len=131072
+
+        # FP8 KV cache: halves KV memory vs BF16, supported on ROCm (AMD).
+        - --kv-cache-dtype=fp8_e4m3
+
+        # ── Expert offloading — UVA (active) ──────────────────────────────
+        # Q6_K: expert weights ≈ 17 GB → set gb to 17, needs ~23 GB CPU RAM.
+        # Q8_0: expert weights ≈ 22 GB → change to 22, needs ~28 GB CPU RAM.
+        # --cpu-offload-params ensures only MoE expert tensors are spilled;
+        # attention/embedding layers remain on GPU for every token.
+        - --cpu-offload-gb=17
+        - --cpu-offload-params=experts
+
+        # ── Expert offloading — Prefetch (alternative, lower latency) ──────
+        # Async prefetch pipelines CPU→GPU transfers alongside compute,
+        # hiding most of the PCIe stall during decode. Swap with UVA above.
+        #
+        # - --offload-group-size=4      # group 4 transformer layers
+        # - --offload-num-in-group=2    # offload last 2 of each group
+        # - --offload-prefetch-step=2   # prefetch 2 groups ahead
+        # - --offload-params=experts    # only the MoE expert tensors
+
+        # ── Misc ──────────────────────────────────────────────────────────
+        - --disable-log-stats
+
+      volumeMounts:
+        - name: vllm-cache
+          mountPath: /root/.cache/huggingface
+        - name: dri
+          mountPath: /dev/dri
+        - name: kfd
+          mountPath: /dev/kfd
+
+      securityContext:
+        privileged: false
+        capabilities:
+          add:
+            - SYS_PTRACE # Required by ROCm runtime
+
+      resources:
+        limits:
+          # Must cover offloaded expert weights + model activations + OS.
+          # Q6_K experts ≈ 17 GB + overhead → 24Gi.
+          # Q8_0 experts ≈ 22 GB + overhead → 30Gi.
+          memory: 24Gi
+
+  volumes:
+    - name: vllm-cache
+      persistentVolumeClaim:
+        claimName: vllm-cache
+    - name: dri
+      hostPath:
+        path: /dev/dri
+    - name: kfd
+      hostPath:
+        path: /dev/kfd # ROCm kernel fusion driver
