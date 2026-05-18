@@ -1,0 +1,17 @@
+[Unit]
+Description=llama.cpp Server - Vulkan GPU (Gemma 4 26B Q6 MoE)
+After=network-online.target
+
+[Kube]
+# Path is relative to this unit file's installed location.
+# install.sh copies llama-server.yaml alongside this file.
+# Generated service name: podman-llama-server.service
+Yaml=llama-server.yaml
+
+[Service]
+Restart=always
+# Allow extra time for model download on first start (~22GB Q6 model)
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

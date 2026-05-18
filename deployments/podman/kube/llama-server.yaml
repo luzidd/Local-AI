@@ -1,0 +1,120 @@
+# llama.cpp server - Vulkan GPU (16GB VRAM), Gemma 4 26B MoE Q6 with expert offloading
+#
+# Deploy:   podman kube play kube/llama-server.yaml
+# Teardown: podman kube play --down kube/llama-server.yaml
+# Logs:     podman logs -f llama-server-llama-server
+#
+# The server is exposed on localhost:11435 so it can coexist with Ollama on 11434.
+# First start downloads the model into the PVC-backed Hugging Face cache.
+#
+# Configuration optimized for:
+#   - 16GB VRAM GPU
+#   - Q6_K quantization (~20-22GB model size)
+#   - 128k context window
+#   - Expert offloading to system RAM (MoE optimization)
+#   - Turbo Quant KV cache compression
+#
+# Useful endpoints:
+#   http://127.0.0.1:11435/health
+#   http://127.0.0.1:11435/v1/models
+#   http://127.0.0.1:11435/v1/chat/completions
+#
+# Performance tuning:
+#   - Adjust LLAMA_ARG_N_CPU_MOE (30-35) to balance GPU/CPU expert distribution
+#   - Increase LLAMA_ARG_N_GPU_LAYERS if VRAM usage is low
+#   - Monitor VRAM with: podman exec llama-server-llama-server nvidia-smi (or rocm-smi)
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama-server-data
+  labels:
+    app: local-ai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Q6_K is ~22 GB. Allocate space for model, cache, and potential Q8 variant.
+      storage: 50Gi
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: llama-server
+  labels:
+    app: local-ai
+spec:
+  restartPolicy: Always
+  securityContext:
+    # Grant the render group (for iGPU) or video group (for dGPU) so the container can access GPU.
+    # Check the GID on the host with: getent group render (or: getent group video)
+    # Common values: render=104, video=44
+    supplementalGroups: [104, 44]
+  containers:
+    - name: llama-server
+      image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+      ports:
+        - containerPort: 8080
+          hostPort: 11435
+          protocol: TCP
+      env:
+        # Persist Hugging Face downloads inside the PVC instead of the container filesystem.
+        - name: HF_HOME
+          value: /models/huggingface
+        - name: XDG_CACHE_HOME
+          value: /models/.cache
+        - name: LLAMA_ARG_HF_REPO
+          value: unsloth/gemma-4-26B-A4B-it-GGUF
+        - name: LLAMA_ARG_HF_FILE
+          value: gemma-4-26B-A4B-it-UD-Q6_K.gguf
+        - name: LLAMA_ARG_ALIAS
+          value: gemma4-26b-q6-128k
+        - name: LLAMA_ARG_HOST
+          value: 0.0.0.0
+        - name: LLAMA_ARG_PORT
+          value: "8080"
+        - name: LLAMA_ARG_CTX_SIZE
+          value: "131072"
+        - name: LLAMA_ARG_THREADS
+          value: "8"
+        - name: LLAMA_ARG_JINJA
+          value: "true"
+        # Expert offloading: keep 32 expert layers on CPU, rest on GPU
+        # Adjust based on VRAM usage (monitor with nvidia-smi/rocm-smi)
+        - name: LLAMA_ARG_N_CPU_MOE
+          value: "32"
+        # Load ~15-20 layers on GPU (tunable based on available VRAM after KV cache)
+        - name: LLAMA_ARG_N_GPU_LAYERS
+          value: "20"
+        # Turbo Quant KV cache compression for 128k context
+        - name: LLAMA_ARG_CACHE_TYPE_K
+          value: "q4_0"
+        - name: LLAMA_ARG_CACHE_TYPE_V
+          value: "q3_0"
+        # Disable mmap: load entire model into RAM for consistent performance
+        - name: LLAMA_ARG_NO_MMAP
+          value: "true"
+        # Lock memory to prevent paging (requires IPC_LOCK capability)
+        - name: LLAMA_ARG_MLOCK
+          value: "true"
+      volumeMounts:
+        - name: llama-server-data
+          mountPath: /models
+        - name: dri
+          mountPath: /dev/dri
+      resources: {}
+      securityContext:
+        capabilities:
+          add:
+            # Required for LLAMA_ARG_MLOCK to prevent memory paging
+            - IPC_LOCK
+  volumes:
+    - name: llama-server-data
+      persistentVolumeClaim:
+        claimName: llama-server-data
+    - name: dri
+      hostPath:
+        path: /dev/dri
