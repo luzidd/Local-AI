@@ -1,4 +1,4 @@
-# vLLM inference server — ROCm (AMD GPU), Gemma 4 27B MoE (26B A4B)
+# vLLM inference server — ROCm (AMD GPU), Gemma 4 26B A4B MoE
 #
 # Deploy:   podman kube play kube/vllm.yaml
 # Teardown: podman kube play --down kube/vllm.yaml
@@ -8,19 +8,24 @@
 #   curl http://localhost:8000/v1/models
 #   curl http://localhost:8000/v1/chat/completions \
 #     -H "Content-Type: application/json" \
-#     -d '{"model":"google/gemma-4-27b-it","messages":[{"role":"user","content":"Hello"}]}'
+#     -d '{"model":"gemma-4-26B-A4B-it-Q6_K","messages":[{"role":"user","content":"Hello"}]}'
 #
 # ── MODEL ───────────────────────────────────────────────────────────────────
-# Gemma 4 27B is a sparse MoE: ~26B total parameters, ~4B active per token.
-# HuggingFace ID: google/gemma-4-27b-it  (gated — accept the license first)
+# Gemma 4 26B A4B MoE is a sparse MoE: ~26B total parameters, ~4B active per token.
+# Base tokenizer/config: google/gemma-4-26B-A4B-it  (gated — accept the license first)
+# Quantized weights:     unsloth/gemma-4-26B-A4B-it-GGUF
 # Native context support: up to 256K tokens.
 #
-# For GGUF (reuse files from Ollama or download separately):
-#   Download Q6_K: huggingface-cli download bartowski/google_gemma-4-27b-it-GGUF \
-#                    --include "*Q6_K*" --local-dir /path/to/cache
-#   Then set:  --model=/root/.cache/huggingface/gguf/gemma-4-27b-it-Q6_K.gguf
-#              --tokenizer=google/gemma-4-27b-it
-#              --load-format=gguf
+# For vLLM on ROCm, use a GGUF quant to cut VRAM/RAM pressure.
+# The default below uses Q6_K, which is the practical balance for 64K-128K context.
+# If you want the largest 8-bit option and have the extra RAM headroom, switch to:
+#   --model=unsloth/gemma-4-26B-A4B-it-GGUF:Q8_0
+#
+# To use a local single-file GGUF instead of loading from Hugging Face, set:
+#   --model=/root/.cache/huggingface/gguf/gemma-4-26B-A4B-it-UD-Q6_K.gguf
+#   --tokenizer=google/gemma-4-26B-A4B-it
+# vLLM's GGUF support is still experimental, but it is the most direct way to
+# stay within a consumer ROCm memory budget while keeping this model size.
 #
 # ── EXPERT OFFLOADING STRATEGY ─────────────────────────────────────────────
 # The inactive expert weights (~17–22B) sit idle in VRAM. Offloading them to
@@ -69,8 +74,8 @@ spec:
   resources:
     requests:
       # HuggingFace model cache.
-      # Gemma 4 27B Q6_K GGUF ≈ 20 GB on disk; Q8_0 ≈ 27 GB.
-      # BF16 safetensors ≈ 54 GB if downloading the full HF model.
+      # Gemma 4 26B A4B UD-Q6_K GGUF ≈ 23 GB on disk; Q8_0 ≈ 27 GB.
+      # Leave room for both the tokenizer/config and one higher-bit variant.
       storage: 60Gi
 
 ---
@@ -106,18 +111,19 @@ spec:
         - name: HF_HOME
           value: "/root/.cache/huggingface"
         # Gemma 4 is a gated model — HF_TOKEN is required.
-        # Accept the license at https://huggingface.co/google/gemma-4-27b-it
+        # Accept the license at https://huggingface.co/google/gemma-4-26B-A4B-it
         # then generate a token at https://huggingface.co/settings/tokens
         - name: HF_TOKEN
           value: "hf_YOUR_TOKEN_HERE"
 
       args:
         # ── Model ─────────────────────────────────────────────────────────
-        # Gemma 4 27B MoE from HuggingFace (safetensors, BF16).
-        # vLLM will quantize or run as-is depending on --dtype and
-        # --quantization flags. For GGUF, see the header comments above.
-        - --model=google/gemma-4-27b-it
-        - --dtype=bfloat16
+        # Use GGUF directly from Hugging Face in repo_id:quant format.
+        # Keep the tokenizer on the official base model to avoid slow or buggy
+        # tokenizer conversion from GGUF metadata.
+        - --model=unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q6_K
+        - --tokenizer=google/gemma-4-26B-A4B-it
+        - --served-model-name=gemma-4-26B-A4B-it-Q6_K
         - --trust-remote-code
 
         # ── Server ────────────────────────────────────────────────────────
@@ -128,19 +134,20 @@ spec:
         # Reserve 95 % of GPU VRAM for vLLM (weights on-GPU + KV cache).
         - --gpu-memory-utilization=0.95
 
-        # Context window. With expert offloading the GPU holds only the
-        # non-expert layers (~3 GB at Q6), leaving ~10 GB for KV cache:
-        #   128K FP8 KV ≈ 2.4 GB  →  comfortable
-        #   256K FP8 KV ≈ 4.8 GB  →  also fits if you want full model max
-        # Change to 262144 for full 256K support.
-        - --max-model-len=131072
+        # Context window. Default to 64K for a safer ROCm starting point on a
+        # 16 GB class GPU. If the Q6_K setup is stable on your box, 128K is the
+        # next step and usually the practical upper target for this deployment:
+        #   64K FP8 KV  ≈ 1.2 GB
+        #   128K FP8 KV ≈ 2.4 GB
+        # Change to 131072 once the 64K profile is confirmed stable.
+        - --max-model-len=65536
 
         # FP8 KV cache: halves KV memory vs BF16, supported on ROCm (AMD).
         - --kv-cache-dtype=fp8_e4m3
 
         # ── Expert offloading — UVA (active) ──────────────────────────────
-        # Q6_K: expert weights ≈ 17 GB → set gb to 17, needs ~23 GB CPU RAM.
-        # Q8_0: expert weights ≈ 22 GB → change to 22, needs ~28 GB CPU RAM.
+        # Q6_K: use this as the default 64K-128K profile on 32 GB system RAM.
+        # Q8_0: bump cpu-offload-gb to about 22 if you move to the 8-bit file.
         # --cpu-offload-params ensures only MoE expert tensors are spilled;
         # attention/embedding layers remain on GPU for every token.
         - --cpu-offload-gb=17
@@ -175,8 +182,8 @@ spec:
       resources:
         limits:
           # Must cover offloaded expert weights + model activations + OS.
-          # Q6_K experts ≈ 17 GB + overhead → 24Gi.
-          # Q8_0 experts ≈ 22 GB + overhead → 30Gi.
+          # Q6_K experts + overhead fit in roughly 24 GiB host RAM.
+          # Increase this if you switch the model line to Q8_0.
           memory: 24Gi
 
   volumes:
